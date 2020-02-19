@@ -28,7 +28,8 @@ void PathTracer::traceScene(QRgb *imageData, const Scene& scene)
         //#pragma omp parallel for
         for(int x = 0; x < m_width; ++x) {
             int offset = x + (y * m_width);
-            intensityValues[offset] = tracePixel(x, y, scene, invViewMat, 100);
+            intensityValues[offset] = tracePixel(x, y, scene, invViewMat, 10);
+//            std::cout << "r: " << intensityValues[offset][0] << std::endl;
         }
     }
 
@@ -38,24 +39,25 @@ void PathTracer::traceScene(QRgb *imageData, const Scene& scene)
 Vector3f PathTracer::tracePixel(int x, int y, const Scene& scene, const Matrix4f &invViewMatrix, int n)
 {
     Vector3f p(0, 0, 0);
-    Vector3f d((2.f * x / m_width) - 1, 1 - (2.f * y / m_height), -1);
+    Vector3f d((2.f * x / m_width)  - 1, 1 - (2.f * y / m_height), -1);
     d.normalize();
 
     Ray r(p, d);
     r = r.transform(invViewMatrix);
     Vector3f out(0,0,0);
-    for (int i = 0; i < 1; i++){
+    for (int i = 0; i < n; i++){
         out += traceRay(r, scene, 0);
+//        std::cout << out[0] << " " << out[1] << " " << out[2] << std::endl;
         // reset direction and redefine ray
 //        double num1 = distribution(generator);
 //        double num2 = distribution(generator);
-//        Vector3f d(((2.f+num1) * x / m_width) - 1, 1 - ((2.f+num2) * y / m_height), -1);
+//        Vector3f d((2.f * x / m_width) - 1 + num1, 1 - (2.f * y / m_height) + num2, -1);
 //        d = sampleNextDir();
 //        d.normalize();
         // create new ray and use change of basis
 //        r.o = p;
 //        r.d = d;
-//        r = Ray(r.o, d);
+//        r = Ray(p, d);
 //        r = r.transform(invViewMatrix);
     }
     out = out/n;
@@ -105,6 +107,9 @@ Vector3f PathTracer::traceRay(const Ray& r, const Scene& scene, int depth)
     Ray ray(r);
     Vector3f L(0, 0, 0);
     if(scene.getIntersection(ray, &i)) {
+        if (depth > 0){
+//            std::cout << depth << std::endl;
+        }
         //** Example code for accessing materials provided by a .mtl file **
         const Triangle *t = static_cast<const Triangle *>(i.data); //Get the triangle in the mesh that was intersected
         const tinyobj::material_t& mat = t->getMaterial(); //Get the material of the triangle from the mesh
@@ -112,36 +117,46 @@ Vector3f PathTracer::traceRay(const Ray& r, const Scene& scene, int depth)
         const tinyobj::real_t *e = mat.emission; //Diffuse color as array of floats
 //        const std::string diffuseTex = mat.diffuse_texname;//Diffuse texture name
         Vector3f d_vec(d[0], d[1], d[2]);
+        float pdf = 1.0/(2.0*PI);
         const Vector3f normal = t->getNormal(i.hit);
+//        L = Vector3f(d[0], d[1], d[2]);
+//        Vector3f direct;
         L = directLighting(i, normal, scene);
         L.array() *= d_vec.array();
-//        L = Vector3f(e[0], e[1], e[2]);//p.emitted(-w); //p is intersection, -w is ray.inv_d
+
+        /*L = Vector3f(d[0], d[1], d[2]);*///p.emitted(-w); //p is intersection, -w is ray.inv_d
         float pdf_rr = 0.8; //continueProb();
         if (random() < pdf_rr){
 
             Vector3f wi = sampleNextDir2(normal);
 //            std::cout << "normal: " << normal[0] << " " << normal[1] << " "<< normal[2] << std::endl;
 //            std::cout << "dir: " << wi[0] << " " << wi[1] << " "<< wi[2] << std::endl;
-            float pdf = 1.0/(2.0*PI);
+
             Ray ray(i.hit, wi);
             Vector3f val;
 //            switch(mat->illum){
 
 //            }
-
-            val = traceRay(ray, scene, depth+1) * diffuseBRDF() * clamp(wi.dot(normal), 0.0f, 1.0f)/ (pdf * pdf_rr);
+//            std::cout << "d_vec: " << d_vec[0] << " " << d_vec[1] << " "<< d_vec[2] << std::endl;
+            Vector3f next = traceRay(ray, scene, depth+1);
+            Vector3f brdf = diffuseBRDF()*d_vec;
+            val = next.array() * brdf.array() * clamp(wi.dot(normal), 0.0f, 1.0f)/ (pdf * pdf_rr);
             //for mirror:
             //Ray ray(i.hit, reflect(ray.inv_d, normal);
             //Vector3f val = traceRay(ray, scene, depth+1) / pdf_rr;
-            val.array() *= d_vec.array();
+//            val.array() *= d_vec.array();
 
             L += val;
+//            std::cout << next[0] << " " << next[1] << " " << next[2] << std::endl;
+
         }
         if (depth == 0){
             L += Vector3f(e[0], e[1], e[2]); //p.emitted(-w);
         }
+//        L += direct;
         return L;
     } else {
+//        std::cout << "here" << std::endl;
         return L;
     }
 }
@@ -251,9 +266,11 @@ void PathTracer::toneMap(QRgb *imageData, std::vector<Vector3f> &intensityValues
     for(int y = 0; y < m_height; ++y) {
         for(int x = 0; x < m_width; ++x) {
             int offset = x + (y * m_width);
-            float r = 255.f * ((float)intensityValues[offset][0]*100 / (1.f + (float)intensityValues[offset][0]*100));
-            float g = 255.f * ((float)intensityValues[offset][1]*100 / (1.f + (float)intensityValues[offset][1]*100));
-            float b = 255.f * ((float)intensityValues[offset][2]*100 / (1.f + (float)intensityValues[offset][2]*100));
+
+            float r = 255.f * ((float)intensityValues[offset][0] / (1.f + (float)intensityValues[offset][0]));
+            float g = 255.f * ((float)intensityValues[offset][1]/ (1.f + (float)intensityValues[offset][1]));
+            float b = 255.f * ((float)intensityValues[offset][2] / (1.f + (float)intensityValues[offset][2]));
+//            std::cout << "r: " << intensityValues[offset][0] << " " << r << std::endl;
             imageData[offset] = qRgb(r,g,b);
         }
     }
