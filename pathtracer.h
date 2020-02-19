@@ -26,10 +26,15 @@ private:
     Eigen::Vector3f traceRay(const Ray& r, const Scene &scene, int depth);
 
     Eigen::Vector3f sampleNextDir();
+    Eigen::Vector3f sampleNextDir2(Eigen::Vector3f normal);
     float continueProb();
-    float diffuseBRDF(Eigen::Vector3f d);
+    float diffuseBRDF();
+    float phongBRDF(Eigen::Vector3f wi, Eigen::Vector3f n, Eigen::Vector3f wo, int s);
+    float specRefractBRDF(Eigen::Vector3f wi, Eigen::Vector3f n);
     float random();
     float clamp(float n, float low, float hi);
+    Eigen::Vector3f reflect(Eigen::Vector3f in, Eigen::Vector3f n);
+    Eigen::Vector3f directLighting(IntersectionInfo i, Eigen::Vector3f id, const Scene& scene);
 
     std::default_random_engine generator;
     std::uniform_real_distribution<double> distribution;

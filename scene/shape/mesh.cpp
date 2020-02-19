@@ -133,3 +133,11 @@ void Mesh::createMeshBVH()
 
     _meshBvh = new BVH(_objects);
 }
+
+Triangle *Mesh::getTriangle() const{
+    return _triangles;
+}
+
+int Mesh::getNumTriangles(){
+    return _faces.size();
+}

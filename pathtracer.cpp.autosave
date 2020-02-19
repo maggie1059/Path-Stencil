@@ -38,17 +38,17 @@ void PathTracer::traceScene(QRgb *imageData, const Scene& scene)
 Vector3f PathTracer::tracePixel(int x, int y, const Scene& scene, const Matrix4f &invViewMatrix, int n)
 {
     Vector3f p(0, 0, 0);
-    Vector3f d((2.f * x / m_width) - 1, 1 - (2.f * y / m_height), -1);
+    Vector3f d((2.f * x / m_width)  - 1, 1 - (2.f * y / m_height), -1);
     d.normalize();
 
     Ray r(p, d);
     r = r.transform(invViewMatrix);
     Vector3f out(0,0,0);
-    for (int i = 0; i < 1; i++){
+    for (int i = 0; i < n; i++){
         out += traceRay(r, scene, 0);
         // reset direction and redefine ray
-//        double num1 = distribution(generator);
-//        double num2 = distribution(generator);
+        double num1 = distribution(generator);
+        double num2 = distribution(generator);
 //        Vector3f d(((2.f+num1) * x / m_width) - 1, 1 - ((2.f+num2) * y / m_height), -1);
 //        d = sampleNextDir();
 //        d.normalize();

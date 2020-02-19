@@ -49,6 +49,9 @@ public:
 
     virtual void setTransform(Eigen::Affine3f transform) override;
 
+    Triangle *getTriangle() const;
+    int getNumTriangles();
+
 private:
     // Properties fromt the scene file
     //CS123SceneMaterial _wholeObjectMaterial;
@@ -61,6 +64,7 @@ private:
     std::vector<Eigen::Vector3i> _faces;
     std::vector<int> _materialIds;
     std::vector<tinyobj::material_t> _materials;
+    Triangle *_triangles;
 
     BVH *_meshBvh;
 
@@ -70,7 +74,6 @@ private:
     BBox transformed_bbox;
 
     std::vector<Object *> *_objects;
-    Triangle *_triangles;
 
     void calculateMeshStats();
     void createMeshBVH();

@@ -52,6 +52,15 @@ bool Triangle::getIntersection(const Ray &ray, IntersectionInfo *intersection) c
     }
 }
 
+float Triangle::getArea(){
+    Vector3f A = _v1-_v2;
+    Vector3f B = _v2-_v3;
+    Vector3f C = _v3-_v1;
+    Vector3f cross = A.cross(B);
+    float mag = cross.norm();
+    return 0.5*mag;
+}
+
 
 Vector3f Triangle::getNormal(const IntersectionInfo &I) const
 {

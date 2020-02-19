@@ -19,6 +19,7 @@ using namespace Eigen;
 
 Scene::Scene()
 {
+//    *_light_triangles = new std::vector<Triangle *>;
 }
 
 Scene::~Scene()
@@ -29,6 +30,7 @@ Scene::~Scene()
     }
     delete _objects;
     delete m_bvh;
+//    delete _light_triangles;
 }
 
 bool Scene::load(QString filename, Scene **scenePointer)
@@ -84,6 +86,24 @@ bool Scene::parseTree(CS123SceneNode *root, Scene *scene, const std::string &bas
     BVH *bvh = new BVH(objects);
 
     scene->_objects = objects;
+    std::vector<Triangle *> lights;
+    for (Object * ob : *objects){
+        Mesh * m = static_cast<Mesh *> (ob);
+        int num_t = m->getNumTriangles();
+        Triangle * t = m->getTriangle();
+        for (int i = 0; i < num_t; i++){
+            const tinyobj::material_t& mat = t->getMaterial();
+            const tinyobj::real_t *e = mat.emission;
+            Vector3f em(e[0], e[1], e[2]);
+            if (em != Vector3f(0,0,0)){
+                std::cout << em[0] << std::endl;
+                lights.push_back(t);
+            }
+            t++;
+//            std::cout << "here" << std::endl;
+        }
+    }
+    scene->_light_triangles = lights;
     scene->setBVH(*bvh);
     return true;
 }
@@ -256,3 +276,6 @@ bool Scene::getIntersection(const Ray& ray, IntersectionInfo* I) const{
     return getBVH().getIntersection(ray, I, false);
 }
 
+std::vector<Triangle *> Scene::getLightTriangles(){
+    return _light_triangles;
+}

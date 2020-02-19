@@ -23,14 +23,15 @@ public:
     virtual Eigen::Vector3f getCentroid() const;
 
     int getIndex() const;
+    float getArea();
 
     tinyobj::material_t getMaterial() const;
     void setMaterial(const tinyobj::material_t &material);
 
-private:
+
     Eigen::Vector3f _v1, _v2, _v3;
     Eigen::Vector3f _n1, _n2, _n3;
-
+private:
     tinyobj::material_t m_material;
 
     int m_index;

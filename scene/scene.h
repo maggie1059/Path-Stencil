@@ -34,10 +34,15 @@ public:
 
     bool getIntersection(const Ray& ray, IntersectionInfo* I) const;
 
+    std::vector<Triangle *> getLightTriangles();
+    std::vector<Triangle *> _light_triangles;
+
+
 private:
 
     BVH *m_bvh;
     std::vector<Object *> *_objects;
+
 
     BasicCamera m_camera;
 
