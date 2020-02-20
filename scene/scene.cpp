@@ -96,11 +96,9 @@ bool Scene::parseTree(CS123SceneNode *root, Scene *scene, const std::string &bas
             const tinyobj::real_t *e = mat.emission;
             Vector3f em(e[0], e[1], e[2]);
             if (em != Vector3f(0,0,0)){
-                std::cout << em[0] << std::endl;
                 lights.push_back(t);
             }
             t++;
-//            std::cout << "here" << std::endl;
         }
     }
     scene->_light_triangles = lights;
