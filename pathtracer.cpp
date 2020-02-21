@@ -29,7 +29,7 @@ void PathTracer::traceScene(QRgb *imageData, const Scene& scene)
         //#pragma omp parallel for
         for(int x = 0; x < m_width; ++x) {
             int offset = x + (y * m_width);
-            intensityValues[offset] = tracePixel(x, y, scene, invViewMat, 10);
+            intensityValues[offset] = tracePixel(x, y, scene, invViewMat, 8);
         }
     }
 
@@ -47,7 +47,7 @@ Vector3f PathTracer::tracePixel(int x, int y, const Scene& scene, const Matrix4f
     r = r.transform(invViewMatrix);
     Vector3f out(0,0,0);
     for (int i = 0; i < n; i++){
-        out += traceRay(r, scene, 0);
+        out += traceRay(r, scene, 0, false);
         // reset direction and redefine ray
         double num1 = distribution(generator);
         double num2 = distribution(generator);
@@ -76,13 +76,12 @@ Vector3f PathTracer::sampleNextDir2(Vector3f normal){
     final.normalize();
     Vector3f zaxis(0,0,1);
     Quaternionf q = Quaternionf::FromTwoVectors(zaxis, normal);
-
     final = q*final;
     final.normalize();
     return final;
 }
 
-Vector3f PathTracer::traceRay(const Ray& r, const Scene& scene, int depth)
+Vector3f PathTracer::traceRay(const Ray& r, const Scene& scene, int depth, bool fromBack)
 {
     IntersectionInfo i;
     Ray ray(r);
@@ -93,23 +92,30 @@ Vector3f PathTracer::traceRay(const Ray& r, const Scene& scene, int depth)
         const tinyobj::real_t *d = mat.diffuse; //Diffuse color as array of floats
         const tinyobj::real_t *e = mat.emission; //Diffuse color as array of floats
         const tinyobj::real_t *s = mat.specular; //Diffuse color as array of floats
+        const tinyobj::real_t ior = mat.ior;
+        const tinyobj::real_t shininess = mat.shininess;
+        float ior_air = 1.f;
 
 //        const std::string diffuseTex = mat.diffuse_texname;//Diffuse texture name
         Vector3f d_vec(d[0], d[1], d[2]);
         Vector3f s_vec(s[0], s[1], s[2]);
         float pdf = 1.0/(2.0*PI);
         const Vector3f normal = t->getNormal(i.hit);
+        bool spec = false;
+        if (s_vec != Vector3f(0,0,0)){
+            spec = true;
+        }
 
-        L = directLighting(i, normal, scene);
-        L.array() *= d_vec.array();
+        L = directLighting(i, normal, scene, spec, ray.d);
+        if (d_vec != Vector3f(0,0,0)){
+            L.array() *= d_vec.array();
+        }
 
         /*L = Vector3f(d[0], d[1], d[2]);*///p.emitted(-w); //p is intersection, -w is ray.inv_d
-        float pdf_rr = 0.8; //continueProb();
+        float pdf_rr = 0.5; //continueProb();
         if (random() < pdf_rr){
 
             Vector3f wi = sampleNextDir2(normal);
-//            std::cout << "d: " << ray.d[0] << " " << ray.d[1] << " "<< ray.d[2] << std::endl;
-//            std::cout << "-d: " << -ray.d[0] << " " << -ray.d[1] << " "<< -ray.d[2] << std::endl;
 //            std::cout << "normal: " << normal[0] << " " << normal[1] << " "<< normal[2] << std::endl;
 
             Vector3f val;
@@ -118,15 +124,19 @@ Vector3f PathTracer::traceRay(const Ray& r, const Scene& scene, int depth)
                     {
                         if (s_vec != Vector3f(0,0,0)){
                             //phong
+                            Vector3f brdf = phongBRDF(ray.d, normal, wi, s_vec, shininess);
+//                            std::cout << shininess << std::endl;
+//                            std::cout << "brdf: " << brdf[0] << " " << brdf[1] << " "<< brdf[2] << std::endl;
+//                            L.array() *= brdf.array();
                             Ray rayp(i.hit, wi);
-                            Vector3f next = traceRay(rayp, scene, depth+1);
-                            Vector3f brdf = phongBRDF(ray.d, normal, wi, s_vec[0])*d_vec;
+                            Vector3f next = traceRay(rayp, scene, depth+1, false);
                             val = next.array() * brdf.array() * clamp(wi.dot(normal), 0.0f, 1.0f)/ (pdf * pdf_rr);
                             break;
                         } else {
                             //diffuse
+//                            L.array() *= d_vec.array();
                             Ray rayd(i.hit, wi);
-                            Vector3f next = traceRay(rayd, scene, depth+1);
+                            Vector3f next = traceRay(rayd, scene, depth+1, false);
                             Vector3f brdf = diffuseBRDF()*d_vec;
                             val = next.array() * brdf.array() * clamp(wi.dot(normal), 0.0f, 1.0f)/ (pdf * pdf_rr);
                             break;
@@ -139,15 +149,70 @@ Vector3f PathTracer::traceRay(const Ray& r, const Scene& scene, int depth)
                         reflected.normalize();
                         Ray raym(i.hit, reflected);
 
-                        Vector3f next = traceRay(raym, scene, 0);
+                        Vector3f next = traceRay(raym, scene, 0, false);
                         val = next.array()/ pdf_rr;
                         break;
                     }
                 case 7:
                     {
+                        Vector3f reflected = reflect(ray.d, normal);
+                        reflected.normalize();
+                        Ray raym(i.hit, reflected);
+
+                        Vector3f reflected_half = traceRay(raym, scene, 0, false);
+                        reflected_half = reflected_half.array();// pdf_rr;
+
                         //fresnel refraction/reflection
-//                        std::cout << "reflected: " << reflected[0] << " " << reflected[1] << " "<< reflected[2] << std::endl;
-//                        std::cout << "normal: " << normal[0] << " " << normal[1] << " "<< normal[2] << std::endl;
+                        //negative nt = 1, ni = ior, flip normal and ni_nt if coming from back of triangle
+                        Vector3f wt;
+//                        std::cout << ray.d.dot(normal) << std::endl;
+                        if (fromBack){
+//                            std::cout << "here" << std::endl;
+                            wt = specRefractBRDF(ray.d, -normal, ior, ior_air);
+                        } else {
+//                            std::cout << "nope" << std::endl;
+                            wt = specRefractBRDF(ray.d, normal, ior_air, ior);
+                        }
+
+//                        Vector3f wt = specRefractBRDF(ray.d, normal, ior_air, ior);
+                        wt.normalize();
+                        if (wt.dot(normal) < 0.f){
+//                            std::cout << "here" << std::endl;
+                            fromBack = true;
+                        } else {
+                            fromBack = false;
+                        }
+                        Ray rayf(i.hit, wt);
+//                        IntersectionInfo i1;
+//                        scene.getIntersection(rayf, &i1);
+//                        const Triangle *t1 = static_cast<const Triangle *>(i1.data);
+//                        const tinyobj::material_t& mat1 = t1->getMaterial();
+//                        const tinyobj::real_t ior1 = mat1.ior;
+//                        const Vector3f normal1 = t1->getNormal(i1.hit);
+
+//                        Vector3f wt2 = specRefractBRDF(wt, -normal1, ior1, ior_air);
+//                        wt2.normalize();
+//                        Ray rayf2(i1.hit, wt2);
+                        Vector3f refracted_half = traceRay(rayf, scene, 0, fromBack);
+//                        val = refracted_half/pdf_rr;
+//                        Vector3f refracted_half(0,0,0);
+//                        Vector3f reflected_half(0,0,0);
+                        refracted_half = refracted_half.array();// pdf_rr;
+                        float c_theta_i = ray.d.dot(normal);
+                        if (c_theta_i < 0.f){
+                            c_theta_i = -c_theta_i;
+                        }
+                        float fres = (ior-ior_air)/(ior+ior_air);
+                        if (fromBack){
+                            fres = (ior_air-ior)/(ior_air+ior);
+//                            c_theta_i = clamp(ray.d.dot(-normal), 0.f, 1.f);
+                        }
+                        float R0 = pow(fres, 2);
+                        float Rti = R0 + ((1-R0)*pow(1-c_theta_i, 5.0));
+//                        std::cout<< Rti << std::endl;
+                        val = (reflected_half * Rti) + (refracted_half*(1-Rti));
+                        val.array() /= pdf_rr;
+//                        std::cout << "val: " << val[0] << " " << val[1] << " "<< val[2] << std::endl;
                         break;
                     }
             }
@@ -162,7 +227,12 @@ Vector3f PathTracer::traceRay(const Ray& r, const Scene& scene, int depth)
     }
 }
 
-Vector3f PathTracer::directLighting(IntersectionInfo i, Vector3f normal, const Scene& scene){
+Vector3f PathTracer::directLighting(IntersectionInfo i, Vector3f normal, const Scene& scene, bool spec, Vector3f rd){
+    const Triangle *t = static_cast<const Triangle *>(i.data);
+    const tinyobj::material_t& mat = t->getMaterial();
+    const tinyobj::real_t *s = mat.specular;
+    const tinyobj::real_t shininess = mat.shininess;
+    Vector3f s_vec(s[0], s[1], s[2]);
     Vector3f p = i.hit;
     Vector3f light(0,0,0);
     std::vector<Triangle *> lights = scene._light_triangles;
@@ -204,7 +274,16 @@ Vector3f PathTracer::directLighting(IntersectionInfo i, Vector3f normal, const S
             const tinyobj::material_t& mat = sample->getMaterial();
             const tinyobj::real_t *e = mat.emission;
             light += Vector3f(e[0], e[1], e[2])*(c_theta*c_p_theta)/(pow((p-new_i.hit).norm(), 2));
+            if (spec){
+                Vector3f brdf = phongBRDF(newdir, normal, rd, s_vec, shininess);
+                light.array() *= brdf.array();
+            }
         }
+//        else if (hit->getMaterial().illum == 7){
+//            const tinyobj::material_t& mat1 = hit->getMaterial();
+//            const tinyobj::real_t ior1 = mat1.ior;
+//            const Vector3f normal1 = hit->getNormal(new_i.hit);
+//        }
     }
     float pdf = 1.f/total_area;
     return light/pdf;
@@ -230,32 +309,26 @@ float PathTracer::diffuseBRDF(){
     return num;
 }
 
-float PathTracer::phongBRDF(Vector3f wi, Vector3f n, Vector3f wo, int s){
+Vector3f PathTracer::phongBRDF(Vector3f wi, Vector3f n, Vector3f wo, Vector3f s, int exp){
     Vector3f reflect = wi - 2.f*wi.dot(n)*n;
     float dotted = reflect.dot(wo);
-    float num = (s+2.f)/(2.f*PI) * pow(dotted, 2.f);
-    return num;
+    float num = (exp+2.f)/(2.f*PI) * pow(dotted, exp);
+    return s*num;
 }
 
-float PathTracer::specRefractBRDF(Vector3f wi, Vector3f n){
-//    float ni = 1.0; //air
-//    float nt = 1.55; //glass
-//    wi.normalize();
-//    float theta_i = acos(wi.dot(n));
-//    float c_theta_i = wi.dot(n);
-//    //if ni < nt
-//    float ni_nt = ni/nt;
-//    float cos_theta_t = sqrt(1 - (ni_nt*ni_nt)*(1-(pow(c_theta_i, 2))));
-//    Vector3f wt = (ni_nt)*wi + (ni_nt*c_theta_i - cos_theta_t*n);
-//    Ray ray(i.hit, wt);
-//    Vector3f val = traceRay(ray, scene, depth+1) / pdf_rr;
-//    float refract = (1 - wt.dot(wo))/cos(theta); //only if in direction wt
-//    float fres = (ni-nt)/(ni+nt);
-//    float R0 = pow(fres, 2);
-//    float Rti = R0 + ((1-R0)*pow(1-c_theta_i, 5.0));
-//    //reflect*Rti + refract(1-Rti)
-//    return Rti;
-    return 0;
+Vector3f PathTracer::specRefractBRDF(Vector3f wi, Vector3f n, float ior_in, float ior_out){
+    wi.normalize();
+    float theta_i = acos(wi.dot(n));
+    float c_theta_i = wi.dot(n);
+    if (c_theta_i < 0.f){
+        c_theta_i = -c_theta_i;
+    }
+//    std::cout << c_theta_i << std::endl;
+    //if ni < nt
+    float ni_nt = ior_in/ior_out;
+    float cos_theta_t = sqrt(1 - (pow(ni_nt, 2)*(1-(pow(c_theta_i, 2)))));
+    Vector3f wt = ((ni_nt)*wi) + ((ni_nt*c_theta_i - cos_theta_t)*n);
+    return wt;
 }
 
 float PathTracer::random(){
@@ -271,7 +344,6 @@ void PathTracer::toneMap(QRgb *imageData, std::vector<Vector3f> &intensityValues
             float r = 255.f * ((float)intensityValues[offset][0] / (1.f + (float)intensityValues[offset][0]));
             float g = 255.f * ((float)intensityValues[offset][1]/ (1.f + (float)intensityValues[offset][1]));
             float b = 255.f * ((float)intensityValues[offset][2] / (1.f + (float)intensityValues[offset][2]));
-//            std::cout << "r: " << intensityValues[offset][0] << " " << r << std::endl;
             imageData[offset] = qRgb(r,g,b);
         }
     }
