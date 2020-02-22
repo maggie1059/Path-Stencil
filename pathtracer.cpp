@@ -8,11 +8,6 @@
 #include <random>
 #include <math.h>
 
-typedef Eigen::Affine3d Transformation;
-typedef Eigen::Vector3d Point;
-typedef Eigen::Vector3d Vector;
-typedef Eigen::Translation<double,3> Translation;
-
 using namespace Eigen;
 
 PathTracer::PathTracer(int width, int height)
@@ -29,7 +24,7 @@ void PathTracer::traceScene(QRgb *imageData, const Scene& scene)
         #pragma omp parallel for
         for(int x = 0; x < m_width; ++x) {
             int offset = x + (y * m_width);
-            intensityValues[offset] = tracePixel(x, y, scene, invViewMat, 20);
+            intensityValues[offset] = tracePixel(x, y, scene, invViewMat, 50);
         }
     }
 
@@ -38,14 +33,13 @@ void PathTracer::traceScene(QRgb *imageData, const Scene& scene)
 
 Vector3f PathTracer::tracePixel(int x, int y, const Scene& scene, const Matrix4f &invViewMatrix, int n)
 {
-    int count = 0;
     Vector3f p(0, 0, 0);
     Vector3f d((2.f * x / m_width)  - 1, 1 - (2.f * y / m_height), -1.f);
-    float pix_w = 2.f/m_width;
-    float pix_h = -2.f/m_height;
 
     // depth of field
-//    float focal_length = 3.2f;
+//    float pix_w = 2.f/m_width;
+//    float pix_h = -2.f/m_height;
+//    float focal_length = 3.35f;
 
 //    double rand1 = distribution(generator) - (0.5);
 //    double rand2 = distribution(generator) - (0.5);
@@ -63,54 +57,53 @@ Vector3f PathTracer::tracePixel(int x, int y, const Scene& scene, const Matrix4f
     Vector3f out(0,0,0);
 
     //stratified sampling
-    for (float i = x; i < x+1; i+= 1.f/16.f){
-        for (float j = y; j < y+1; j += 1.f/16.f){
-            out += traceRay(r, scene, 0, false);
-            double num1 = distribution(generator);
-            double num2 = distribution(generator);
-            double offsetx = (num1 * pix_w);
-            double offsety = (num2 * pix_h);
+//    for (float i = x; i < x+1; i+= 1.f/7.f){
+//        for (float j = y; j < y+1; j += 1.f/7.f){
+//            out += traceRay(r, scene, 0, false);
+//            double num1 = distribution(generator);
+//            double num2 = distribution(generator);
+//            double offsetx = (num1 * pix_w);
+//            double offsety = (num2 * pix_h);
 
-            p = Vector3f(0,0,0);
-            Vector3f d((2.f * i / m_width)  - 1 + offsetx, 1 - (2.f * j / m_height) + offsety, -1.f);
-            d.normalize();
-            r = Ray(p, d);
-            r = r.transform(invViewMatrix);
-            count += 1;
-        }
-    }
+//            p = Vector3f(0,0,0);
+//            Vector3f d((2.f * i / m_width)  - 1 + offsetx, 1 - (2.f * j / m_height) + offsety, -1.f);
+//            d.normalize();
+//            r = Ray(p, d);
+//            r = r.transform(invViewMatrix);
+//        }
+//    }
 
     // normal
-//    for (int i = 0; i < n; i++){
-//        out += traceRay(r, scene, 0, false);
-//        // reset direction and redefine ray
-//        double num1 = distribution(generator);
-//        double num2 = distribution(generator);
-//        double offsetx = num1 * 2.f / m_width;
-//        double offsety = num2 * (-2.f) / m_height;
+    for (int i = 0; i < n; i++){
+        out += traceRay(r, scene, 0, false);
+        // reset direction and redefine ray
+        double num1 = distribution(generator);
+        double num2 = distribution(generator);
+        double offsetx = num1 * 2.f / m_width;
+        double offsety = num2 * (-2.f) / m_height;
 
-//        p = Vector3f(0,0,0);
-////        d = Vector3f((2.f * x / m_width)  - 1, 1 - (2.f * y / m_height), -1);
-//        Vector3f d((2.f * x / m_width)  - 1 + offsetx, 1 - (2.f * y / m_height) + offsety, -1.f);
+        p = Vector3f(0,0,0);
+//        d = Vector3f((2.f * x / m_width)  - 1, 1 - (2.f * y / m_height), -1);
+        Vector3f d((2.f * x / m_width)  - 1 + offsetx, 1 - (2.f * y / m_height) + offsety, -1.f);
+        d.normalize();
+        // create new ray
+//     depth of field
+//        double rand1 = distribution(generator) - (0.5);
+//        double rand2 = distribution(generator) - (0.5);
+//        rand1 *= 0.5f;
+//        rand2 *= 0.5f;
+//        Vector3f offset(rand1, rand2, 0.0);
+//        p += offset;
+
+//        Vector3f fp(d*focal_length);
+//        d = fp - p;
 //        d.normalize();
-//        // create new ray
-    // depth of field
-////        double rand1 = distribution(generator) - (0.5);
-////        double rand2 = distribution(generator) - (0.5);
-////        rand1 *= 0.5f;
-////        rand2 *= 0.5f;
-////        Vector3f offset(rand1, rand2, 0.0);
-////        p += offset;
 
-////        Vector3f fp(d*focal_length);
-////        d = fp - p;
-////        d.normalize();
-
-//        r = Ray(p, d);
-//        r = r.transform(invViewMatrix);
-//    }
-//    out = out/n;
-    out = out/16.f;
+        r = Ray(p, d);
+        r = r.transform(invViewMatrix);
+    }
+    out = out/n;
+//    out = out/49.f;
     return out;
 }
 
@@ -181,7 +174,7 @@ Vector3f PathTracer::traceRay(const Ray& r, const Scene& scene, int depth, bool 
         const tinyobj::real_t *e = mat.emission; //Emissive color as array of floats
         const tinyobj::real_t *s = mat.specular; //Specular color as array of floats
         const tinyobj::real_t ior = mat.ior;
-        const tinyobj::real_t shininess = 20; //mat.shininess;
+        const tinyobj::real_t shininess = mat.shininess;
         float ior_air = 1.f;
 
         Vector3f d_vec(d[0], d[1], d[2]);
@@ -380,7 +373,7 @@ float PathTracer::diffuseBRDF(){
     return num;
 }
 
-Vector3f PathTracer::phongBRDF(Vector3f wi, Vector3f n, Vector3f wo, Vector3f s, int exp){
+Vector3f PathTracer::phongBRDF(Vector3f wi, Vector3f n, Vector3f wo, Vector3f s, float exp){
     Vector3f reflect = wi - 2.f*wi.dot(n)*n;
     float dotted = reflect.dot(wo);
     float num = (exp+2.f)/(2.f*PI) * pow(dotted, exp);
@@ -396,9 +389,6 @@ Vector3f PathTracer::specRefractBRDF(Vector3f wi, Vector3f n, float ior_in, floa
     float ni_nt = ior_in/ior_out;
     float cos_theta_t = sqrt(1 - (pow(ni_nt, 2)*(1-(pow(c_theta_i, 2)))));
     Vector3f wt = ((ni_nt)*wi) + ((ni_nt*c_theta_i - cos_theta_t)*n);
-    if (ior_in == 2.5){
-        std::cout << c_theta_i<< std::endl;
-    }
     return wt;
 }
 

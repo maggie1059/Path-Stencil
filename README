@@ -1,0 +1,57 @@
+PATH README
+
+All final output images are in the folder "final output images." My path tracer can be run with the standard command line arguments: "./example-scenes/CornellBox.xml ./out.png" and outputs files in PNG format. To change the scene, you can go into the CornellBox.xml file and specify which obj file to read. The code for extra features is commented out (running as is will be vanilla path tracer).
+
+Note: My output images have relatively low numbers of paths per pixel (esp. the refraction image, due to the internal reflection recursions), because my computer could not handle very high pp's.
+
+Here is the list of which images in the final output images folder demonstrate which features of my path tracer:
+
+Standard features:
+
+Diffuse BRDF:
+out-diffuse-final.png (50 pp, pdf_rr=0.7)
+
+Glossy/specular BRDF:
+out-glossy-final.png (40 pp, pdf_rr=0.7)
+
+Mirror BRDF:
+out-mirror-glass-final.png (15 pp, pdf_rr=0.5)
+out-mirror-final.png (40 pp, pdf_rr=0.7)
+
+Refraction+reflection BRDF:
+out-mirror-glass-final.png (50 pp, pdf_rr=0.7)
+
+Soft shadows/Russian roulette termination:
+all images
+
+Indirect illumination:
+out-diffuse-indirect-final.png (50 pp, pdf_rr=0.7)
+(Event splitting in all other images)
+
+
+
+Extra features:
+
+Depth of field:
+(focal length = 3.35, aperture size = 0.5)
+out-dof-final.png (compare with out-diffuse-final.png) (50 pp, pdf_rr=0.7)
+
+BRDF sampling:
+Diffuse: out-diffuse-impsamp-final.png (compare with out-diffuse-final.png) (50 pp, pdf_rr=0.7)
+Glossy: out-glossy-impsamp-final.png (compare with out-glossy-final.png) (40 pp, pdf_rr=0.7)
+
+Stratified sampling:
+(7x7 grid, one random sample from each)
+out-diffuse-stratified-final.png (compare with out-diffuse-final.png) (49 pp, pdf_rr=0.7)
+
+
+
+References:
+
+Depth of field:
+https://medium.com/@elope139/depth-of-field-in-path-tracing-e61180417027
+https://www.keithlantz.net/2013/03/path-tracer-depth-of-field/
+
+BRDF importance sampling:
+https://www.cs.princeton.edu/courses/archive/fall16/cos526/papers/importance.pdf
+

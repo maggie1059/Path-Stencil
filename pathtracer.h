@@ -31,7 +31,7 @@ private:
     Eigen::Vector3f sampleNextDir2(Eigen::Vector3f normal);
     float continueProb();
     float diffuseBRDF();
-    Eigen::Vector3f phongBRDF(Eigen::Vector3f wi, Eigen::Vector3f n, Eigen::Vector3f wo, Eigen::Vector3f s, int exp);
+    Eigen::Vector3f phongBRDF(Eigen::Vector3f wi, Eigen::Vector3f n, Eigen::Vector3f wo, Eigen::Vector3f s, float exp);
     Eigen::Vector3f specRefractBRDF(Eigen::Vector3f wi, Eigen::Vector3f n, float ior_in, float ior_out);
     float random();
     float clamp(float n, float low, float hi);
