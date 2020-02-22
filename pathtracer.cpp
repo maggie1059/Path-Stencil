@@ -29,7 +29,7 @@ void PathTracer::traceScene(QRgb *imageData, const Scene& scene)
         #pragma omp parallel for
         for(int x = 0; x < m_width; ++x) {
             int offset = x + (y * m_width);
-            intensityValues[offset] = tracePixel(x, y, scene, invViewMat, 50);
+            intensityValues[offset] = tracePixel(x, y, scene, invViewMat, 20);
         }
     }
 
@@ -38,10 +38,14 @@ void PathTracer::traceScene(QRgb *imageData, const Scene& scene)
 
 Vector3f PathTracer::tracePixel(int x, int y, const Scene& scene, const Matrix4f &invViewMatrix, int n)
 {
+    int count = 0;
     Vector3f p(0, 0, 0);
     Vector3f d((2.f * x / m_width)  - 1, 1 - (2.f * y / m_height), -1.f);
+    float pix_w = 2.f/m_width;
+    float pix_h = -2.f/m_height;
 
-//    float focal_length = 3.05f;
+    // depth of field
+//    float focal_length = 3.2f;
 
 //    double rand1 = distribution(generator) - (0.5);
 //    double rand2 = distribution(generator) - (0.5);
@@ -57,34 +61,56 @@ Vector3f PathTracer::tracePixel(int x, int y, const Scene& scene, const Matrix4f
     Ray r(p, d);
     r = r.transform(invViewMatrix);
     Vector3f out(0,0,0);
-    for (int i = 0; i < n; i++){
-        out += traceRay(r, scene, 0, false);
-        // reset direction and redefine ray
-        double num1 = distribution(generator);
-        double num2 = distribution(generator);
-        double offsetx = num1 * 2.f / m_width;
-        double offsety = num2 * (-2.f) / m_height;
 
-        p = Vector3f(0,0,0);
-//        d = Vector3f((2.f * x / m_width)  - 1, 1 - (2.f * y / m_height), -1);
-        Vector3f d((2.f * x / m_width)  - 1 + offsetx, 1 - (2.f * y / m_height) + offsety, -1.f);
-//        d.normalize();
-        // create new ray
-//        double rand1 = distribution(generator) - (0.5);
-//        double rand2 = distribution(generator) - (0.5);
-//        rand1 *= 0.5f;
-//        rand2 *= 0.5f;
-//        Vector3f offset(rand1, rand2, 0.0);
-//        p += offset;
+    //stratified sampling
+    for (float i = x; i < x+1; i+= 1.f/16.f){
+        for (float j = y; j < y+1; j += 1.f/16.f){
+            out += traceRay(r, scene, 0, false);
+            double num1 = distribution(generator);
+            double num2 = distribution(generator);
+            double offsetx = (num1 * pix_w);
+            double offsety = (num2 * pix_h);
 
-//        Vector3f fp(d*focal_length);
-//        d = fp - p;
-//        d.normalize();
-
-        r = Ray(p, d);
-        r = r.transform(invViewMatrix);
+            p = Vector3f(0,0,0);
+            Vector3f d((2.f * i / m_width)  - 1 + offsetx, 1 - (2.f * j / m_height) + offsety, -1.f);
+            d.normalize();
+            r = Ray(p, d);
+            r = r.transform(invViewMatrix);
+            count += 1;
+        }
     }
-    out = out/n;
+
+    // normal
+//    for (int i = 0; i < n; i++){
+//        out += traceRay(r, scene, 0, false);
+//        // reset direction and redefine ray
+//        double num1 = distribution(generator);
+//        double num2 = distribution(generator);
+//        double offsetx = num1 * 2.f / m_width;
+//        double offsety = num2 * (-2.f) / m_height;
+
+//        p = Vector3f(0,0,0);
+////        d = Vector3f((2.f * x / m_width)  - 1, 1 - (2.f * y / m_height), -1);
+//        Vector3f d((2.f * x / m_width)  - 1 + offsetx, 1 - (2.f * y / m_height) + offsety, -1.f);
+//        d.normalize();
+//        // create new ray
+    // depth of field
+////        double rand1 = distribution(generator) - (0.5);
+////        double rand2 = distribution(generator) - (0.5);
+////        rand1 *= 0.5f;
+////        rand2 *= 0.5f;
+////        Vector3f offset(rand1, rand2, 0.0);
+////        p += offset;
+
+////        Vector3f fp(d*focal_length);
+////        d = fp - p;
+////        d.normalize();
+
+//        r = Ray(p, d);
+//        r = r.transform(invViewMatrix);
+//    }
+//    out = out/n;
+    out = out/16.f;
     return out;
 }
 
@@ -109,19 +135,14 @@ Vector3f PathTracer::sampleNextDirDiffuse(Vector3f normal){
 Vector3f PathTracer::sampleNextDirSpec(Vector3f normal, Vector3f d, float shininess, float alpha){
     Vector3f perfSpec = reflect(d, normal);
     double num1 = distribution(generator);
-//    double num2 = distribution(generator);
     float phi = 2.0f * PI * num1;
     float theta = alpha;
-//    float theta = clamp(acos(pow(num2, 1.f/(shininess+1.f))), 0.0f, 1.0f);
-//    std::cout<< "first: " << theta << std::endl;
-//    theta = acos(normal.dot(perfSpec)) + theta;
 
     float x = sin(theta) * cos(phi);
     float y = sin(theta) * sin(phi);
     float z = cos(theta);
     Vector3f final(x,y,z);
     final.normalize();
-//    std::cout<< final.dot(perfSpec) << std::endl;
 
     Vector3f zaxis(0,0,1);
     Quaternionf q = Quaternionf::FromTwoVectors(zaxis, perfSpec);
@@ -157,13 +178,12 @@ Vector3f PathTracer::traceRay(const Ray& r, const Scene& scene, int depth, bool 
         const Triangle *t = static_cast<const Triangle *>(i.data); //Get the triangle in the mesh that was intersected
         const tinyobj::material_t& mat = t->getMaterial(); //Get the material of the triangle from the mesh
         const tinyobj::real_t *d = mat.diffuse; //Diffuse color as array of floats
-        const tinyobj::real_t *e = mat.emission; //Diffuse color as array of floats
-        const tinyobj::real_t *s = mat.specular; //Diffuse color as array of floats
+        const tinyobj::real_t *e = mat.emission; //Emissive color as array of floats
+        const tinyobj::real_t *s = mat.specular; //Specular color as array of floats
         const tinyobj::real_t ior = mat.ior;
-        const tinyobj::real_t shininess = 20;//mat.shininess;
+        const tinyobj::real_t shininess = 20; //mat.shininess;
         float ior_air = 1.f;
 
-//        const std::string diffuseTex = mat.diffuse_texname;//Diffuse texture name
         Vector3f d_vec(d[0], d[1], d[2]);
         Vector3f s_vec(s[0], s[1], s[2]);
         float pdf = 1.0/(2.0*PI);
@@ -178,24 +198,23 @@ Vector3f PathTracer::traceRay(const Ray& r, const Scene& scene, int depth, bool 
             L.array() *= d_vec.array();
         }
 
-        /*L = Vector3f(d[0], d[1], d[2]);*///p.emitted(-w); //p is intersection, -w is ray.inv_d
-        float pdf_rr = 0.7; //continueProb();
+        float pdf_rr = 0.7;
+
         if (random() < pdf_rr){
 
             Vector3f wi = sampleNextDir2(normal);
-//            std::cout << "normal: " << normal[0] << " " << normal[1] << " "<< normal[2] << std::endl;
             Vector3f val;
+
             switch(mat.illum){
                 case 2:
                     {
                         if (spec){
-                            //phong
-                            double num2 = distribution(generator);
-                            float alpha = acos(pow(num2, 1.f/(shininess+1.f)));
-//                            std::cout << alpha << std::endl;
-                            wi = sampleNextDirSpec(normal, ray.d, shininess, alpha);
-//                            wi = reflect(ray.d, normal);
-                            pdf = ((shininess+1)/(2*PI))*pow(clamp(cos(alpha), 0.f, 1.f), shininess);
+                            //specular
+                            //importance sampling
+//                            double num2 = distribution(generator);
+//                            float alpha = acos(pow(num2, 1.f/(shininess+1.f)));
+//                            wi = sampleNextDirSpec(normal, ray.d, shininess, alpha);
+//                            pdf = ((shininess+1)/(2*PI))*pow(clamp(cos(alpha), 0.f, 1.f), shininess);
 
                             Vector3f brdf = phongBRDF(wi, normal, ray.d, s_vec, shininess);
                             Ray rayp(i.hit, wi);
@@ -206,6 +225,7 @@ Vector3f PathTracer::traceRay(const Ray& r, const Scene& scene, int depth, bool 
                         } else {
                             //diffuse
                             Ray rayd(i.hit, wi);
+                            //importance sampling
 //                            wi = sampleNextDirDiffuse(normal);
 //                            pdf = wi.dot(normal)/PI;
                             Vector3f next = traceRay(rayd, scene, depth+1, false);
@@ -227,22 +247,24 @@ Vector3f PathTracer::traceRay(const Ray& r, const Scene& scene, int depth, bool 
                     }
                 case 7:
                     {
+                        // reflected half
                         Vector3f reflected = reflect(ray.d, normal);
                         reflected.normalize();
                         Ray raym(i.hit, reflected);
 
                         Vector3f reflected_half = traceRay(raym, scene, 0, false);
-                        reflected_half = reflected_half.array()/pdf_rr;// pdf_rr;
+                        reflected_half = reflected_half.array()/pdf_rr;
 
-                        //fresnel refraction/reflection
-                        //negative nt = 1, ni = ior, flip normal and ni_nt if coming from back of triangle
+                        //refracted half
                         Vector3f wt;
+                        // if coming from inside object, flip normal and ior's
                         if (fromBack){
                             wt = specRefractBRDF(ray.d, -normal, ior, ior_air);
                         } else {
                             wt = specRefractBRDF(ray.d, normal, ior_air, ior);
                         }
                         wt.normalize();
+                        //if hitting inside, set flag true for next bounce
                         if (wt.dot(normal) < 0.f){
                             fromBack = true;
                         } else {
@@ -253,6 +275,8 @@ Vector3f PathTracer::traceRay(const Ray& r, const Scene& scene, int depth, bool 
                         Vector3f refracted_half = traceRay(rayf, scene, 0, fromBack);
 
                         refracted_half = refracted_half.array()/pdf_rr;
+
+                        //calculate cos(theta_i) and fresnel term
                         float c_theta_i = ray.d.dot(normal);
                         if (c_theta_i < 0.f){
                             c_theta_i = -c_theta_i;
@@ -260,7 +284,6 @@ Vector3f PathTracer::traceRay(const Ray& r, const Scene& scene, int depth, bool 
                         float fres = (ior-ior_air)/(ior+ior_air);
                         if (fromBack){
                             fres = (ior_air-ior)/(ior_air+ior);
-//                            c_theta_i = clamp(ray.d.dot(-normal), 0.f, 1.f);
                         }
                         float R0 = pow(fres, 2);
                         float Rti = R0 + ((1-R0)*pow(1-c_theta_i, 5.0));
@@ -270,6 +293,7 @@ Vector3f PathTracer::traceRay(const Ray& r, const Scene& scene, int depth, bool 
             }
             L += val;
         }
+        //add emission if depth 0 for event splitting
         if (depth == 0){
             L += Vector3f(e[0], e[1], e[2]);
         }
