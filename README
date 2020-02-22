@@ -1,8 +1,8 @@
 PATH README
 
-All final output images are in the folder "final output images." My path tracer can be run with the standard command line arguments: "./example-scenes/CornellBox.xml ./out.png" and outputs files in PNG format. To change the scene, you can go into the CornellBox.xml file and specify which obj file to read. The code for extra features is commented out (running as is will be vanilla path tracer).
+All final output images are in the folder "final output images." My path tracer can be run with the standard command line arguments: "./example-scenes/CornellBox.xml ./out.png" and outputs files in PNG format. To change the scene, you can go into the CornellBox.xml file and specify which obj file to read. Extra features can be toggled on using the #define statements at the top of pathtracer.cpp. Running as is will be the vanilla path tracer.
 
-Note: My output images have relatively low numbers of paths per pixel (esp. the refraction image, due to the internal reflection recursions), because my computer could not handle very high pp's.
+Note: My output images have relatively low numbers of paths per pixel (esp. the refraction image, due to the internal reflection recursions), because my computer could not handle very high pp's. If anything fails to write to file, lowering pdf_rr and pp (at the top of pathtracer.cpp) should fix it.
 
 Here is the list of which images in the final output images folder demonstrate which features of my path tracer:
 

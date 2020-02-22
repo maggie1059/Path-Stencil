@@ -27,12 +27,10 @@ private:
     Eigen::Vector3f tracePixel(int x, int y, const Scene &scene, const Eigen::Matrix4f &invViewMatrix, int n);
     Eigen::Vector3f traceRay(const Ray& r, const Scene &scene, int depth, bool fromBack);
 
-    Eigen::Vector3f sampleNextDir();
     Eigen::Vector3f sampleNextDir2(Eigen::Vector3f normal);
-    float continueProb();
     float diffuseBRDF();
-    Eigen::Vector3f phongBRDF(Eigen::Vector3f wi, Eigen::Vector3f n, Eigen::Vector3f wo, Eigen::Vector3f s, float exp);
-    Eigen::Vector3f specRefractBRDF(Eigen::Vector3f wi, Eigen::Vector3f n, float ior_in, float ior_out);
+    Eigen::Vector3f glossyBRDF(Eigen::Vector3f wi, Eigen::Vector3f n, Eigen::Vector3f wo, Eigen::Vector3f s, float exp);
+    Eigen::Vector3f refractDir(Eigen::Vector3f wi, Eigen::Vector3f n, float ior_in, float ior_out);
     float random();
     float clamp(float n, float low, float hi);
     Eigen::Vector3f reflect(Eigen::Vector3f in, Eigen::Vector3f n);

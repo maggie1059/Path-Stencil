@@ -8,6 +8,13 @@
 #include <random>
 #include <math.h>
 
+#define diffuse_importance_sampling false
+#define specular_importance_sampling false
+#define depth_of_field false
+#define stratified_sampling true
+#define pdf_rr 0.7 //russian roulette probability of termination
+#define pp 10 //paths per pixel
+
 using namespace Eigen;
 
 PathTracer::PathTracer(int width, int height)
@@ -24,7 +31,7 @@ void PathTracer::traceScene(QRgb *imageData, const Scene& scene)
         #pragma omp parallel for
         for(int x = 0; x < m_width; ++x) {
             int offset = x + (y * m_width);
-            intensityValues[offset] = tracePixel(x, y, scene, invViewMat, 50);
+            intensityValues[offset] = tracePixel(x, y, scene, invViewMat, pp);
         }
     }
 
@@ -33,80 +40,88 @@ void PathTracer::traceScene(QRgb *imageData, const Scene& scene)
 
 Vector3f PathTracer::tracePixel(int x, int y, const Scene& scene, const Matrix4f &invViewMatrix, int n)
 {
+    float pix_w = 2.f/m_width; //pixel width
+    float pix_h = -2.f/m_height; //pixel height
+    float focal_length = 3.2f; //focal length for depth of field
+    float aperture = 0.5f;
+
     Vector3f p(0, 0, 0);
     Vector3f d((2.f * x / m_width)  - 1, 1 - (2.f * y / m_height), -1.f);
+    d.normalize();
 
     // depth of field
-//    float pix_w = 2.f/m_width;
-//    float pix_h = -2.f/m_height;
-//    float focal_length = 3.35f;
+    if (depth_of_field){
+        double rand1 = distribution(generator) - (0.5); //center at 0
+        double rand2 = distribution(generator) - (0.5);
+        rand1 *= aperture;
+        rand2 *= aperture;
+        Vector3f offset(rand1, rand2, 0.0);
+        p += offset;
 
-//    double rand1 = distribution(generator) - (0.5);
-//    double rand2 = distribution(generator) - (0.5);
-//    rand1 *= 0.5f;
-//    rand2 *= 0.5f;
-//    Vector3f offset(rand1, rand2, 0.0);
-//    p += offset;
-
-//    Vector3f fp(d*focal_length);
-//    d = fp - p;
-//    d.normalize();
+        Vector3f fp(d*focal_length);
+        d = fp - p;
+        d.normalize();
+    }
 
     Ray r(p, d);
     r = r.transform(invViewMatrix);
     Vector3f out(0,0,0);
 
     //stratified sampling
-//    for (float i = x; i < x+1; i+= 1.f/7.f){
-//        for (float j = y; j < y+1; j += 1.f/7.f){
-//            out += traceRay(r, scene, 0, false);
-//            double num1 = distribution(generator);
-//            double num2 = distribution(generator);
-//            double offsetx = (num1 * pix_w);
-//            double offsety = (num2 * pix_h);
+    if (stratified_sampling) {
+        for (float i = x; i < x+1; i+= 1.f/4.f){
+            for (float j = y; j < y+1; j += 1.f/4.f){
+                out += traceRay(r, scene, 0, false);
+                double num1 = distribution(generator);
+                double num2 = distribution(generator);
+                double offsetx = (num1 * pix_w);
+                double offsety = (num2 * pix_h);
 
-//            p = Vector3f(0,0,0);
-//            Vector3f d((2.f * i / m_width)  - 1 + offsetx, 1 - (2.f * j / m_height) + offsety, -1.f);
-//            d.normalize();
-//            r = Ray(p, d);
-//            r = r.transform(invViewMatrix);
-//        }
-//    }
+                p = Vector3f(0,0,0);
+                Vector3f d((2.f * i / m_width)  - 1 + offsetx, 1 - (2.f * j / m_height) + offsety, -1.f);
+                d.normalize();
+                r = Ray(p, d);
+                r = r.transform(invViewMatrix);
+            }
+        }
+        out = out/16.f;
+    } else {
+        for (int i = 0; i < n; i++){
+            out += traceRay(r, scene, 0, false);
+            // reset direction and redefine ray
+            double num1 = distribution(generator);
+            double num2 = distribution(generator);
+            double offsetx = num1 * 2.f / m_width;
+            double offsety = num2 * (-2.f) / m_height;
 
-    // normal
-    for (int i = 0; i < n; i++){
-        out += traceRay(r, scene, 0, false);
-        // reset direction and redefine ray
-        double num1 = distribution(generator);
-        double num2 = distribution(generator);
-        double offsetx = num1 * 2.f / m_width;
-        double offsety = num2 * (-2.f) / m_height;
+            p = Vector3f(0,0,0);
+            Vector3f d((2.f * x / m_width)  - 1 + offsetx, 1 - (2.f * y / m_height) + offsety, -1.f);
+            d.normalize();
 
-        p = Vector3f(0,0,0);
-//        d = Vector3f((2.f * x / m_width)  - 1, 1 - (2.f * y / m_height), -1);
-        Vector3f d((2.f * x / m_width)  - 1 + offsetx, 1 - (2.f * y / m_height) + offsety, -1.f);
-        d.normalize();
-        // create new ray
-//     depth of field
-//        double rand1 = distribution(generator) - (0.5);
-//        double rand2 = distribution(generator) - (0.5);
-//        rand1 *= 0.5f;
-//        rand2 *= 0.5f;
-//        Vector3f offset(rand1, rand2, 0.0);
-//        p += offset;
+            // depth of field
+            if (depth_of_field){
+                d = Vector3f((2.f * x / m_width)  - 1, 1 - (2.f * y / m_height), -1);
+                double rand1 = distribution(generator) - (0.5);
+                double rand2 = distribution(generator) - (0.5);
+                rand1 *= aperture;
+                rand2 *= aperture;
+                Vector3f offset(rand1, rand2, 0.0);
+                p += offset;
 
-//        Vector3f fp(d*focal_length);
-//        d = fp - p;
-//        d.normalize();
+                Vector3f fp(d*focal_length);
+                d = fp - p;
+                d.normalize();
+            }
 
-        r = Ray(p, d);
-        r = r.transform(invViewMatrix);
+            r = Ray(p, d);
+            r = r.transform(invViewMatrix);
+        }
+        out = out/n;
     }
-    out = out/n;
-//    out = out/49.f;
     return out;
 }
 
+// sampling next direction for diffuse surfaces (importance sampling)
 Vector3f PathTracer::sampleNextDirDiffuse(Vector3f normal){
     double num1 = distribution(generator);
     double num2 = distribution(generator);
@@ -125,6 +140,7 @@ Vector3f PathTracer::sampleNextDirDiffuse(Vector3f normal){
     return final;
 }
 
+// sampling next direction for specular surfaces (importance sampling)
 Vector3f PathTracer::sampleNextDirSpec(Vector3f normal, Vector3f d, float shininess, float alpha){
     Vector3f perfSpec = reflect(d, normal);
     double num1 = distribution(generator);
@@ -144,6 +160,7 @@ Vector3f PathTracer::sampleNextDirSpec(Vector3f normal, Vector3f d, float shinin
     return final;
 }
 
+// uniform sampling for next direction
 Vector3f PathTracer::sampleNextDir2(Vector3f normal){
     double num1 = distribution(generator);
     double num2 = distribution(generator);
@@ -175,26 +192,30 @@ Vector3f PathTracer::traceRay(const Ray& r, const Scene& scene, int depth, bool 
         const tinyobj::real_t *s = mat.specular; //Specular color as array of floats
         const tinyobj::real_t ior = mat.ior;
         const tinyobj::real_t shininess = mat.shininess;
-        float ior_air = 1.f;
+        float ior_air = 1.f; //index of refraction for air
 
         Vector3f d_vec(d[0], d[1], d[2]);
         Vector3f s_vec(s[0], s[1], s[2]);
+
+        //pdf for uniform sampling
         float pdf = 1.0/(2.0*PI);
         const Vector3f normal = t->getNormal(i.hit);
+
+        //specify if specular surface to account for in direct lighting
         bool spec = false;
         if (s_vec != Vector3f(0,0,0)){
             spec = true;
         }
 
+        //add light values from direct lighting
         L = directLighting(i, normal, scene, spec, ray.d);
+        //if diffuse (and not also specular), multiply light by diffuse values
         if (d_vec != Vector3f(0,0,0) && !spec){
             L.array() *= d_vec.array();
         }
 
-        float pdf_rr = 0.7;
-
         if (random() < pdf_rr){
-
+            //sample next direction uniformly
             Vector3f wi = sampleNextDir2(normal);
             Vector3f val;
 
@@ -203,13 +224,14 @@ Vector3f PathTracer::traceRay(const Ray& r, const Scene& scene, int depth, bool 
                     {
                         if (spec){
                             //specular
-                            //importance sampling
-//                            double num2 = distribution(generator);
-//                            float alpha = acos(pow(num2, 1.f/(shininess+1.f)));
-//                            wi = sampleNextDirSpec(normal, ray.d, shininess, alpha);
-//                            pdf = ((shininess+1)/(2*PI))*pow(clamp(cos(alpha), 0.f, 1.f), shininess);
-
-                            Vector3f brdf = phongBRDF(wi, normal, ray.d, s_vec, shininess);
+                            //importance sampling, reset direction and pdf
+                            if (specular_importance_sampling){
+                                double num2 = distribution(generator);
+                                float alpha = acos(pow(num2, 1.f/(shininess+1.f)));
+                                wi = sampleNextDirSpec(normal, ray.d, shininess, alpha);
+                                pdf = ((shininess+1)/(2*PI))*pow(clamp(cos(alpha), 0.f, 1.f), shininess);
+                            }
+                            Vector3f brdf = glossyBRDF(wi, normal, ray.d, s_vec, shininess);
                             Ray rayp(i.hit, wi);
                             Vector3f next = traceRay(rayp, scene, depth+1, false);
 
@@ -217,10 +239,12 @@ Vector3f PathTracer::traceRay(const Ray& r, const Scene& scene, int depth, bool 
                             break;
                         } else {
                             //diffuse
+                            //importance sampling, reset direction and pdf
+                            if (diffuse_importance_sampling){
+                                wi = sampleNextDirDiffuse(normal);
+                                pdf = wi.dot(normal)/PI;
+                            }
                             Ray rayd(i.hit, wi);
-                            //importance sampling
-//                            wi = sampleNextDirDiffuse(normal);
-//                            pdf = wi.dot(normal)/PI;
                             Vector3f next = traceRay(rayd, scene, depth+1, false);
                             Vector3f brdf = diffuseBRDF()*d_vec;
                             val = next.array() * brdf.array() * clamp(wi.dot(normal), 0.0f, 1.0f)/ (pdf * pdf_rr);
@@ -252,9 +276,9 @@ Vector3f PathTracer::traceRay(const Ray& r, const Scene& scene, int depth, bool 
                         Vector3f wt;
                         // if coming from inside object, flip normal and ior's
                         if (fromBack){
-                            wt = specRefractBRDF(ray.d, -normal, ior, ior_air);
+                            wt = refractDir(ray.d, -normal, ior, ior_air);
                         } else {
-                            wt = specRefractBRDF(ray.d, normal, ior_air, ior);
+                            wt = refractDir(ray.d, normal, ior_air, ior);
                         }
                         wt.normalize();
                         //if hitting inside, set flag true for next bounce
@@ -301,9 +325,11 @@ Vector3f PathTracer::directLighting(IntersectionInfo i, Vector3f normal, const S
     const tinyobj::material_t& mat = t->getMaterial();
     const tinyobj::real_t *s = mat.specular;
     const tinyobj::real_t shininess = mat.shininess;
+
     Vector3f s_vec(s[0], s[1], s[2]);
     Vector3f p = i.hit;
     Vector3f light(0,0,0);
+    //get list of lights from scene
     std::vector<Triangle *> lights = scene._light_triangles;
     float total_area = 0;
     float num = distribution(generator);
@@ -314,7 +340,7 @@ Vector3f PathTracer::directLighting(IntersectionInfo i, Vector3f normal, const S
         total_area += triangle->getArea();
     }
     Triangle *sample = lights[num];
-    //randomly sample point from sample
+    //randomly sample point from random triangle
     float r1 = random();
     float r2 = random();
     Vector3f A = sample->_v1;
@@ -337,14 +363,16 @@ Vector3f PathTracer::directLighting(IntersectionInfo i, Vector3f normal, const S
     else if (c_p_theta < 0){
         return Vector3f(0,0,0);
     }
+    //if no obstructions, add light/emission values
     else if(scene.getIntersection(ray, &new_i)) {
         const Triangle *hit = static_cast<const Triangle *>(new_i.data);
         if (hit->getIndex() == sample->getIndex()){
             const tinyobj::material_t& mat = sample->getMaterial();
             const tinyobj::real_t *e = mat.emission;
             light += Vector3f(e[0], e[1], e[2])*(c_theta*c_p_theta)/(pow((p-new_i.hit).norm(), 2));
+            //if specular, multiply by specular brdf
             if (spec){
-                Vector3f brdf = phongBRDF(newdir, normal, rd, s_vec, shininess);
+                Vector3f brdf = glossyBRDF(newdir, normal, rd, s_vec, shininess);
                 light.array() *= brdf.array();
             }
         }
@@ -373,14 +401,16 @@ float PathTracer::diffuseBRDF(){
     return num;
 }
 
-Vector3f PathTracer::phongBRDF(Vector3f wi, Vector3f n, Vector3f wo, Vector3f s, float exp){
+//specular BRDF, multiplies by specular values and returns vector3f
+Vector3f PathTracer::glossyBRDF(Vector3f wi, Vector3f n, Vector3f wo, Vector3f s, float exp){
     Vector3f reflect = wi - 2.f*wi.dot(n)*n;
-    float dotted = reflect.dot(wo);
+    float dotted = clamp(reflect.dot(wo), 0.f, 1.f);
     float num = (exp+2.f)/(2.f*PI) * pow(dotted, exp);
     return s*num;
 }
 
-Vector3f PathTracer::specRefractBRDF(Vector3f wi, Vector3f n, float ior_in, float ior_out){
+//gets direction of refraction
+Vector3f PathTracer::refractDir(Vector3f wi, Vector3f n, float ior_in, float ior_out){
     wi.normalize();
     float c_theta_i = wi.dot(n);
     if (c_theta_i < 0.f){
