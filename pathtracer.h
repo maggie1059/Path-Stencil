@@ -21,6 +21,8 @@ private:
     int m_width, m_height;
 
     void toneMap(QRgb *imageData, std::vector<Eigen::Vector3f> &intensityValues);
+    Eigen::Vector3f sampleNextDirDiffuse(Eigen::Vector3f normal);
+    Eigen::Vector3f sampleNextDirSpec(Eigen::Vector3f normal, Eigen::Vector3f d, float shininess, float alpha);
 
     Eigen::Vector3f tracePixel(int x, int y, const Scene &scene, const Eigen::Matrix4f &invViewMatrix, int n);
     Eigen::Vector3f traceRay(const Ray& r, const Scene &scene, int depth, bool fromBack);
