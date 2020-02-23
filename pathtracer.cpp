@@ -11,9 +11,9 @@
 #define diffuse_importance_sampling false
 #define specular_importance_sampling false
 #define depth_of_field false
-#define stratified_sampling true
+#define stratified_sampling false
 #define pdf_rr 0.7 //russian roulette probability of termination
-#define pp 10 //paths per pixel
+#define pp 25 //paths per pixel
 
 using namespace Eigen;
 
@@ -69,22 +69,24 @@ Vector3f PathTracer::tracePixel(int x, int y, const Scene& scene, const Matrix4f
 
     //stratified sampling
     if (stratified_sampling) {
-        for (float i = x; i < x+1; i+= 1.f/4.f){
-            for (float j = y; j < y+1; j += 1.f/4.f){
+        float incx = (1.f/5.f) * (2/m_width);
+        float incy = (1.f/5.f) * (2/m_height);
+        for (int i = 0; i < 5; i+= 1){
+            for (int j = 0; j < 5; j += 1){
                 out += traceRay(r, scene, 0, false);
                 double num1 = distribution(generator);
                 double num2 = distribution(generator);
-                double offsetx = (num1 * pix_w);
-                double offsety = (num2 * pix_h);
+                double offsetx = (num1 * incx) + (i*incx);
+                double offsety = (num2 * incy) + (j*incy);
 
                 p = Vector3f(0,0,0);
-                Vector3f d((2.f * i / m_width)  - 1 + offsetx, 1 - (2.f * j / m_height) + offsety, -1.f);
+                Vector3f d((2.f * x / m_width)  - 1 + offsetx, 1 - (2.f * y / m_height) - offsety, -1.f);
                 d.normalize();
                 r = Ray(p, d);
                 r = r.transform(invViewMatrix);
             }
         }
-        out = out/16.f;
+        out = out/25.f;
     } else {
         for (int i = 0; i < n; i++){
             out += traceRay(r, scene, 0, false);
