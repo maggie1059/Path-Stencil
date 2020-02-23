@@ -13,7 +13,7 @@
 #define depth_of_field false
 #define stratified_sampling false
 #define pdf_rr 0.7 //russian roulette probability of termination
-#define pp 25 //paths per pixel
+#define pp 20 //paths per pixel
 
 using namespace Eigen;
 
@@ -69,10 +69,10 @@ Vector3f PathTracer::tracePixel(int x, int y, const Scene& scene, const Matrix4f
 
     //stratified sampling
     if (stratified_sampling) {
-        float incx = (1.f/5.f) * (2/m_width);
-        float incy = (1.f/5.f) * (2/m_height);
-        for (int i = 0; i < 5; i+= 1){
-            for (int j = 0; j < 5; j += 1){
+        float incx = (1.f/7.f) * (2/m_width);
+        float incy = (1.f/7.f) * (2/m_height);
+        for (int i = 0; i < 7; i+= 1){
+            for (int j = 0; j < 7; j += 1){
                 out += traceRay(r, scene, 0, false);
                 double num1 = distribution(generator);
                 double num2 = distribution(generator);
@@ -86,7 +86,7 @@ Vector3f PathTracer::tracePixel(int x, int y, const Scene& scene, const Matrix4f
                 r = r.transform(invViewMatrix);
             }
         }
-        out = out/25.f;
+        out = out/49.f;
     } else {
         for (int i = 0; i < n; i++){
             out += traceRay(r, scene, 0, false);

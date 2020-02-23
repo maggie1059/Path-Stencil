@@ -42,8 +42,9 @@ Glossy: out-glossy-impsamp-final.png (compare with out-glossy-final.png) (40 pp,
 
 Stratified sampling:
 (7x7 grid, one random sample from each)
-out-diffuse-stratified-final.png (compare with out-diffuse-final.png) (49 pp, pdf_rr=0.7)
-
+out-strat-gloss-final.png (compare with out-gloss-49.png) (49 pp, pdf_rr=0.7)
+out-diffuse-strat-final.png (compare with out-diffuse-49.png) (49 pp, pdf_rr=0.7)
+(The differences are difficult to see unless you zoom in, possibly due to the number of samples. Can compare the smoothness of the red reflections on the glossy sphere and tall box.)
 
 
 References:
